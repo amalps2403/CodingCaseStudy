@@ -1,0 +1,33 @@
+
+# Docker file have to test
+
+# Use the official image as a base
+FROM mcr.microsoft.com/dotnet/aspnet:9.0.1-alpine3.21 AS base
+WORKDIR /App
+
+
+# Use the SDK image for building the application
+FROM mcr.microsoft.com/dotnet/sdk:9.0.102-alpine3.21 AS build
+WORKDIR /src
+
+COPY ["GAC.IntegrationSolution.API/GAC.IntegrationSolution.API.csproj", "GAC.IntegrationSolution.API/"]
+RUN dotnet restore "GAC.API/GAC.GAC.IntegrationSolution.API.csproj"
+COPY . .
+WORKDIR "/src/GAC.IntegrationSolution.API"
+RUN dotnet build "GAC.IntegrationSolution.API.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "GAC.IntegrationSolution.API.csproj" -c Release -o /app/publish
+
+# Copy the published output to the base image and set entry point
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+EXPOSE 8090
+
+RUN adduser -S -D appuser
+RUN chown -R appuser /App
+USER appuser
+
+ENTRYPOINT ["dotnet", "GAC.IntegrationSolution.API.dll"]

@@ -78,11 +78,36 @@ The configuration for the solution is managed primarily through the appsettings.
       "AllowedHosts": "*"
     }
 
+##### Entity Framework Core – Migrations
+
+The GAC Integration Solution uses Entity Framework Core for managing database schema.
+
+Running Migrations from Visual Studio:
+
+1. Open Package Manager Console via `Tools → NuGet Package Manager → Package Manager Console.`
+
+2. Set the Default Project to `GAC.Infrastructure`.
+
+3. Run the following command to create a migration:
+
+       Add-Migration InitialCreate
+
+4. Then update the database:
+
+       Update-Database
+
+
 #### Steps to Run Locally
 
-- Clone the Repository: If you haven't already, clone the repository to your local machine using Git.
+- Clone the Repository: If you haven't already, clone the repository to your local machine using Git:
+
+
+       git clone https://github.com/amalps2403/CodingCaseStudy.git
+  
 - Restore Dependencies: Run the following command in the solution directory to restore NuGet packages:
-       dotnet restore
+
+      dotnet restore
+  
 - Set Up Database: Ensure SQL Server (or LocalDB) is running. You may need to create the database manually or run migration scripts to set up the schema.
 - Run the Application: Launch the solution in your preferred IDE (Visual Studio or VS Code) or from the command line.
 - Test the Application: You can now access the API endpoints using Postman for testing the RESTful APIs, since swagger is not supporting in .Net 9.

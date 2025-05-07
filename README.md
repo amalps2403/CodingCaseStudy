@@ -20,7 +20,7 @@ The GAC Integration Solution follows a clean architecture with distinct layers t
 
 - **GAC.Domain**: Defines the core entities and enums used across the solution.
 
-- **GAC.IntegrationSolution.Tests**: A project for unit testing, using xUnit or NUnit, ensuring code quality and reliability.
+- **GAC.IntegrationSolution.Tests**: A project for unit testing, using xUnit ensuring code quality and reliability.
 
 - **GAC.IntegrationSolution.FilePoller**: A worker service responsible for polling and processing legacy XML files on a scheduled basis.
 

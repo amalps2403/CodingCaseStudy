@@ -1,0 +1,15 @@
+﻿<PurchaseOrder>
+	<OrderId>12345</OrderId>
+	<ProcessingDate>2025-05-07T00:00:00</ProcessingDate>
+	<Customer>ACME Corp.</Customer>
+	<Products>
+		<Product>
+			<ProductCode>ABC123</ProductCode>
+			<Quantity>10</Quantity>
+		</Product>
+		<Product>
+			<ProductCode>XYZ456</ProductCode>
+			<Quantity>5</Quantity>
+		</Product>
+	</Products>
+</PurchaseOrder>

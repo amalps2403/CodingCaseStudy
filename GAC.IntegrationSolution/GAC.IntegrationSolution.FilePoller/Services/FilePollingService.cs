@@ -1,19 +1,9 @@
 ﻿using Cronos;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using GAC.IntegrationSolution.FilePoller.Models;
-using System.Net.Http;
 using System.Text;
 using System.Xml.Serialization;
-using Newtonsoft.Json;
 using GAC.IntegrationSolution.FilePoller.Settings;
 using Microsoft.Extensions.Options;
 using GAC.IntegrationSolution.FilePoller.DTOs;
-using System.Runtime;
 using Polly;
 
 namespace GAC.IntegrationSolution.FilePoller.Services
@@ -26,8 +16,6 @@ namespace GAC.IntegrationSolution.FilePoller.Services
         private readonly CronExpression _cron;
         private DateTime _nextRun;
         private readonly IHttpClientFactory _httpClientFactory;
-
-        private readonly string _watchFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SampleFiles");
 
 
         public FilePollingService(
@@ -59,107 +47,71 @@ namespace GAC.IntegrationSolution.FilePoller.Services
             }
         }
 
-        //private async Task PollAndProcessFilesAsync()
-        //{
-        //    var fullPath = Path.Combine(AppContext.BaseDirectory, _settings.WatchFolder);
-        //    if (!Directory.Exists(fullPath))
-        //    {
-        //        _logger.LogWarning("Watch folder not found: {Folder}", _settings.WatchFolder);
-        //        return;
-        //    }
-        //    _settings.WatchFolder = fullPath;
 
-        //    var files = Directory.GetFiles(_settings.WatchFolder, "*.xml");
-        //    foreach (var file in files)
-        //    {
-        //        try
-        //        {
-        //            _logger.LogInformation("Processing: {file}", file);
-        //            using var stream = File.OpenRead(file);
-        //            var serializer = new XmlSerializer(typeof(PurchaseOrderDto));
-        //            var po = (PurchaseOrderDto?)serializer.Deserialize(stream);
-
-        //            if (po != null)
-        //            {
-        //                var json = System.Text.Json.JsonSerializer.Serialize(po);
-        //                var client = _httpClientFactory.CreateClient();
-        //                var content = new StringContent(json, Encoding.UTF8, "application/json");
-        //                var response = await client.PostAsync($"{_apiSettings.Endpoint}wms/orders", content);
-        //                response.EnsureSuccessStatusCode();
-
-        //                _logger.LogInformation("Posted successfully: {file}", file);
-        //            }
-        //            File.Move(file, file + ".done");
-        //        }
-        //        catch (Exception ex)
-        //        {
-        //            _logger.LogError(ex, "Error processing file: {file}", file);
-        //        }
-        //    }
-        //}
-
-
+        /// <summary>
+        /// Polls the watch folder for XML files, processes them, and sends data to the WMS API.
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="HttpRequestException"></exception>
         private async Task PollAndProcessFilesAsync()
         {
-            var fullPath = Path.Combine(AppContext.BaseDirectory, _settings.WatchFolder);
-            if (!Directory.Exists(fullPath))
+            var fullPath = Path.Combine(AppContext.BaseDirectory, _settings.WatchFolder); // Combine the base directory with the watch folder path.
+            if (!Directory.Exists(fullPath)) // Check if the watch folder exists.
             {
-                _logger.LogWarning("Watch folder not found: {Folder}", _settings.WatchFolder);
-                return;
+                _logger.LogWarning("Watch folder not found: {Folder}", _settings.WatchFolder); // Log a warning if the folder is missing.
+                return; // Exit the method if the folder doesn't exist.
             }
-            _settings.WatchFolder = fullPath;
+            _settings.WatchFolder = fullPath; // Update the watch folder path to the full path.
 
-
-            // instead of hardcoding the retry count we can change it to a configuration value
+            // Define a retry policy for handling transient HTTP errors.
             var retryPolicy = Policy
-                .Handle<HttpRequestException>()
-                .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
+                .Handle<HttpRequestException>() // Handle HTTP request exceptions.
+                .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode) // Handle unsuccessful HTTP responses.
                 .WaitAndRetryAsync(
-                    retryCount: 3,
-                    sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+                    retryCount: 3, // Retry up to 3 times.
+                    sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)), // Exponential backoff for retries.
                     onRetry: (outcome, timespan, attempt, context) =>
                     {
                         _logger.LogWarning("Retry {Attempt} for file due to: {Reason}", attempt,
-                            outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString());
+                            outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()); // Log each retry attempt.
                     });
 
-            var files = Directory.GetFiles(_settings.WatchFolder, "*.xml");
-            foreach (var file in files)
+            var files = Directory.GetFiles(_settings.WatchFolder, "*.xml"); // Get all XML files in the watch folder.
+            foreach (var file in files) // Iterate through each file.
             {
                 try
                 {
-                    _logger.LogInformation("Processing: {file}", file);
-                    using var stream = File.OpenRead(file);
-                    var serializer = new XmlSerializer(typeof(PurchaseOrderDto));
-                    var po = (PurchaseOrderDto?)serializer.Deserialize(stream);
+                    _logger.LogInformation("Processing: {file}", file); // Log the file being processed.
+                    using var stream = File.OpenRead(file); // Open the file for reading.
+                    var serializer = new XmlSerializer(typeof(PurchaseOrderDto)); // Create an XML serializer for the PurchaseOrderDto type.
+                    var po = (PurchaseOrderDto?)serializer.Deserialize(stream); // Deserialize the XML file into a PurchaseOrderDto object.
 
-                    if (po != null)
+                    if (po != null) // Check if the deserialization was successful.
                     {
-                        var json = System.Text.Json.JsonSerializer.Serialize(po);
-                        var client = _httpClientFactory.CreateClient();
-                        var content = new StringContent(json, Encoding.UTF8, "application/json");
+                        var json = System.Text.Json.JsonSerializer.Serialize(po); // Serialize the object to JSON.
+                        var client = _httpClientFactory.CreateClient(); // Create an HTTP client instance.
+                        var content = new StringContent(json, Encoding.UTF8, "application/json"); // Create the HTTP content with JSON payload.
 
                         var response = await retryPolicy.ExecuteAsync(() =>
-                            client.PostAsync($"{_apiSettings.Endpoint}wms/orders", content));
+                            client.PostAsync($"{_apiSettings.Endpoint}wms/orders", content)); // Send the JSON data to the WMS API with retry logic.
 
-                        if (response.IsSuccessStatusCode)
+                        if (response.IsSuccessStatusCode) // Check if the API call was successful.
                         {
-                            _logger.LogInformation("Posted successfully: {file}", file);
-                            // commenting for testing purpose
-                            // File.Move(file, file + ".done", overwrite: true);
+                            _logger.LogInformation("Posted successfully: {file}", file); // Log the success.
+                                                                                         // File.Move(file, file + ".done", overwrite: true); // Uncomment to rename the file after successful processing.
                         }
                         else
                         {
-                            throw new HttpRequestException($"API returned {response.StatusCode}");
+                            throw new HttpRequestException($"API returned {response.StatusCode}"); // Throw an exception for unsuccessful responses.
                         }
-                        _logger.LogInformation("Posted successfully: {file}", file);
+                        _logger.LogInformation("Posted successfully: {file}", file); // Log the success again.
                     }
 
-                    File.Move(file, file + ".done");
+                    File.Move(file, file + ".done"); // Rename the file to mark it as processed.
                 }
-                catch (Exception ex)
+                catch (Exception ex) // Catch any exceptions during processing.
                 {
-                    _logger.LogError(ex, "Error processing file: {file}", file);
+                    _logger.LogError(ex, "Error processing file: {file}", file); // Log the error with the exception details.
                 }
             }
         }
